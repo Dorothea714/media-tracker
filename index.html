@@ -706,10 +706,16 @@ const APIService = {
   async _proxy(params){
     const qs = new URLSearchParams(params).toString();
     try{
-      const resp = await fetch(`${API_BASE}?${qs}`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const resp = await fetch(`${API_BASE}?${qs}`, { signal: controller.signal });
+      clearTimeout(timeout);
       if(!resp.ok)return null;
       return await resp.json();
-    }catch(e){console.warn('API proxy error:',e);return null}
+    }catch(e){
+      console.warn('API proxy error:', e.message);
+      return null;
+    }
   },
 
   async searchBooks(query){
