@@ -699,77 +699,71 @@ const db=new IDBManager();
 // =============================================================================
 // 4. API SERVICE
 // =============================================================================
+// All API calls now go through Netlify Function proxy to bypass GFW blocks
+const API_BASE = '/api/search';
+
 const APIService = {
+  async _proxy(params){
+    const qs = new URLSearchParams(params).toString();
+    try{
+      const resp = await fetch(`${API_BASE}?${qs}`);
+      if(!resp.ok)return null;
+      return await resp.json();
+    }catch(e){console.warn('API proxy error:',e);return null}
+  },
+
   async searchBooks(query){
     if(!query.trim())return[];
-    try{
-      const resp=await fetch(
-        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8&langRestrict=zh`
-      );
-      if(!resp.ok)return[];
-      const data=await resp.json();
-      if(!data.items)return[];
-      return data.items.map(item=>{
-        const vi=item.volumeInfo||{};
-        return{
-          id:item.id,
-          title:vi.title||'',
-          author:(vi.authors||[]).join('、'),
-          cover:vi.imageLinks?.thumbnail?.replace('http:','https:')||'',
-          year:(vi.publishedDate||'').slice(0,4),
-          desc:(vi.description||'').slice(0,300),
-          genres:vi.categories||[],
-          type:'book'
-        };
-      });
-    }catch(e){console.warn('Google Books search error:',e);return[]}
+    const data = await this._proxy({type:'book',q:query});
+    if(!data||!data.items)return[];
+    return data.items.map(item=>{
+      const vi=item.volumeInfo||{};
+      return{
+        id:item.id,
+        title:vi.title||'',
+        author:(vi.authors||[]).join('、'),
+        cover:vi.imageLinks?.thumbnail?.replace('http:','https:')||'',
+        year:(vi.publishedDate||'').slice(0,4),
+        desc:(vi.description||'').slice(0,300),
+        genres:vi.categories||[],
+        type:'book'
+      };
+    });
   },
 
   async searchMovies(query,apiKey){
     if(!apiKey||!query.trim())return[];
-    try{
-      const resp=await fetch(
-        `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${encodeURIComponent(query)}&language=zh-CN&page=1`
-      );
-      if(!resp.ok)return[];
-      const data=await resp.json();
-      if(!data.results)return[];
-      return data.results.slice(0,8).map(r=>({
-        id:r.id.toString(),
-        title:r.title||r.original_title||'',
-        author:'', // movie uses director, would need separate API call
-        cover:r.poster_path?`https://image.tmdb.org/t/p/w500${r.poster_path}`:'',
-        year:(r.release_date||'').slice(0,4),
-        desc:(r.overview||'').slice(0,300),
-        genres:(r.genre_ids||[]).map(gid=>TMDB_MOVIE_GENRES[gid]||'').filter(Boolean),
-        type:'movie',
-        original_language:r.original_language||''
-      }));
-    }catch(e){console.warn('TMDB movie search error:',e);return[]}
+    const data = await this._proxy({type:'movie',q:query,key:apiKey});
+    if(!data||!data.results)return[];
+    return data.results.slice(0,8).map(r=>({
+      id:r.id.toString(),
+      title:r.title||r.original_title||'',
+      author:'',
+      cover:r.poster_path?`https://image.tmdb.org/t/p/w500${r.poster_path}`:'',
+      year:(r.release_date||'').slice(0,4),
+      desc:(r.overview||'').slice(0,300),
+      genres:(r.genre_ids||[]).map(gid=>TMDB_MOVIE_GENRES[gid]||'').filter(Boolean),
+      type:'movie',
+      original_language:r.original_language||''
+    }));
   },
 
   async searchTV(query,apiKey){
     if(!apiKey||!query.trim())return[];
-    try{
-      const resp=await fetch(
-        `https://api.themoviedb.org/3/search/tv?api_key=${apiKey}&query=${encodeURIComponent(query)}&language=zh-CN&page=1`
-      );
-      if(!resp.ok)return[];
-      const data=await resp.json();
-      if(!data.results)return[];
-      return data.results.slice(0,8).map(r=>({
-        id:r.id.toString(),
-        title:r.name||r.original_name||'',
-        author:'',
-        cover:r.poster_path?`https://image.tmdb.org/t/p/w500${r.poster_path}`:'',
-        year:(r.first_air_date||'').slice(0,4),
-        desc:(r.overview||'').slice(0,300),
-        genres:(r.genre_ids||[]).map(gid=>TMDB_TV_GENRES[gid]||'').filter(Boolean),
-        type:'tv',
-        original_language:r.original_language||'',
-        origin_country:(r.origin_country||[])[0]||''
-      }));
-    }catch(e){console.warn('TMDB TV search error:',e);return[]}
+    const data = await this._proxy({type:'tv',q:query,key:apiKey});
+    if(!data||!data.results)return[];
+    return data.results.slice(0,8).map(r=>({
+      id:r.id.toString(),
+      title:r.name||r.original_name||'',
+      author:'',
+      cover:r.poster_path?`https://image.tmdb.org/t/p/w500${r.poster_path}`:'',
+      year:(r.first_air_date||'').slice(0,4),
+      desc:(r.overview||'').slice(0,300),
+      genres:(r.genre_ids||[]).map(gid=>TMDB_TV_GENRES[gid]||'').filter(Boolean),
+      type:'tv',
+      original_language:r.original_language||'',
+      origin_country:(r.origin_country||[])[0]||''
+    }));
   }
 };
 
